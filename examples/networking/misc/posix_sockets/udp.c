@@ -114,6 +114,16 @@ static int udp_send(char *addr_str, char *port_str, char *data, unsigned int num
             printf("unknown network interface %s\n", iface);
         }
     }
+	else {
+		netif_t *netif = NULL;
+		netif = netif_iter(netif);
+		if (netif) {
+			dst.sin6_scope_id = (uint32_t) netif_get_id(netif);
+		}
+		else {
+			printf("No active network interface");
+		}
+	}
 #endif /* SOCK_HAS_IPV6 */
     /* parse destination address */
     if (inet_pton(AF_INET6, addr_str, &dst.sin6_addr) != 1) {
