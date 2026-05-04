@@ -30,10 +30,9 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#ifdef SOCK_HAS_IPV6
+#include "net/utils.h"
 #include "net/ipv6/addr.h"     /* for interface parsing */
 #include "net/netif.h"         /* for resolving ipv6 scope */
-#endif /* SOCK_HAS_IPV6 */
 
 #include "shell.h"
 #include "thread.h"
@@ -101,35 +100,15 @@ static int udp_send(char *addr_str, char *port_str, char *data, unsigned int num
     src.sin6_family = AF_INET6;
     dst.sin6_family = AF_INET6;
     memset(&src.sin6_addr, 0, sizeof(src.sin6_addr));
+
     /* parse interface id */
-#ifdef SOCK_HAS_IPV6
-    char *iface;
-    iface = ipv6_addr_split_iface(addr_str); /* also removes interface id */
-    if (iface) {
-        netif_t *netif = netif_get_by_name(iface);
-        if (netif) {
-            dst.sin6_scope_id = (uint32_t) netif_get_id(netif);
-        }
-        else {
-            printf("unknown network interface %s\n", iface);
-        }
-    }
-	else {
-		netif_t *netif = NULL;
-		netif = netif_iter(netif);
-		if (netif) {
-			dst.sin6_scope_id = (uint32_t) netif_get_id(netif);
-		}
-		else {
-			printf("No active network interface");
-		}
+	netif_t *netif;
+	if (netutils_get_ipv6((ipv6_addr_t *)&dst.sin6_addr, &netif, addr_str)) {
+		printf("cannot resolve %s\n", addr_str);
+		return 1;
 	}
-#endif /* SOCK_HAS_IPV6 */
-    /* parse destination address */
-    if (inet_pton(AF_INET6, addr_str, &dst.sin6_addr) != 1) {
-        puts("Error: unable to parse destination address");
-        return 1;
-    }
+	dst.sin6_scope_id = netif ? (uint32_t)netif_get_id(netif) : 0;	
+
     /* parse port */
     port = atoi(port_str);
     dst.sin6_port = htons(port);
