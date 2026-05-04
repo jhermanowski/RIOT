@@ -184,8 +184,8 @@ int gnrc_tcp_ep_from_str(gnrc_tcp_ep_t *ep, const char *str)
     unsigned netif = 0;
 
     /* Examine given string */
-    char *addr_begin = strchr(str, '[');
-    char *addr_end = strchr(str, ']');
+    const char *addr_begin = strchr(str, '[');
+    const char *addr_end = strchr(str, ']');
 
     /* 1) Ensure that str contains a single pair of brackets */
     if (!addr_begin || !addr_end || strchr(addr_begin + 1, '[') || strchr(addr_end + 1, ']')) {
@@ -201,7 +201,7 @@ int gnrc_tcp_ep_from_str(gnrc_tcp_ep_t *ep, const char *str)
     }
 
     /* 3) Examine optional port number */
-    char *port_begin = strchr(addr_end, ':');
+    const char *port_begin = strchr(addr_end, ':');
     if (port_begin) {
         /* 3.1) Ensure that there are characters left to parse after ':'. */
         if (*(++port_begin) == '\0') {
@@ -211,7 +211,7 @@ int gnrc_tcp_ep_from_str(gnrc_tcp_ep_t *ep, const char *str)
         }
 
         /* 3.2) Ensure that port is a number (atol, does not report errors) */
-        for (char *ptr = port_begin; *ptr; ++ptr) {
+        for (const char *ptr = port_begin; *ptr; ++ptr) {
             if ((*ptr < '0') || ('9' < *ptr)) {
                 TCP_DEBUG_ERROR("-EINVAL: Invalid address string.");
                 TCP_DEBUG_LEAVE;
@@ -229,7 +229,7 @@ int gnrc_tcp_ep_from_str(gnrc_tcp_ep_t *ep, const char *str)
     }
 
     /* 4) Examine optional interface identifier. */
-    char *if_begin = strchr(str, '%');
+    const char *if_begin = strchr(str, '%');
     if (if_begin) {
         /* 4.1) Ensure that the identifier is not empty and within brackets. */
         if (addr_end <= (++if_begin)) {
@@ -239,7 +239,7 @@ int gnrc_tcp_ep_from_str(gnrc_tcp_ep_t *ep, const char *str)
         }
 
         /* 4.2) Ensure that the identifier is a number (atol, does not report errors) */
-        for (char *ptr = if_begin; ptr != addr_end; ++ptr) {
+        for (const char *ptr = if_begin; ptr != addr_end; ++ptr) {
             if ((*ptr < '0') || ('9' < *ptr)) {
                 TCP_DEBUG_ERROR("-EINVAL: Invalid address string.");
                 TCP_DEBUG_LEAVE;
