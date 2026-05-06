@@ -105,9 +105,9 @@ GPIO32 is used as **TFT_LED** signal and ADC_LINE(4) is not available.
 makefile of the application to enable the according default board and
 peripheral configuration:
 \n
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```makefile
 USEMODULE += esp_lolin_tft
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```
 
 For detailed information about the configuration of ESP32 boards, see section \ref esp32_peripherals "Common Peripherals".
 
@@ -120,23 +120,23 @@ network interface modules have been tested with the board. You could use
 the following code in your \ref esp32_application_specific_configurations
 "application-specific configuration" to use such modules:
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~{.c}
+```c
 #ifdef BOARD_ESP32_WEMOS_LOLIN_D32_PRO
 
-#if MODULE_MRF24J40
-#define MRF24J40_PARAM_CS       GPIO15      /* MRF24J40 CS signal    */
-#define MRF24J40_PARAM_RESET    GPIO2       /* MRF24J40 RESET signal */
-#define MRF24J40_PARAM_INT      GPIO13      /* MRF24J40 INT signal   */
-#endif
+#  if MODULE_MRF24J40
+#    define MRF24J40_PARAM_CS       GPIO15  /* MRF24J40 CS signal    */
+#    define MRF24J40_PARAM_RESET    GPIO2   /* MRF24J40 RESET signal */
+#    define MRF24J40_PARAM_INT      GPIO13  /* MRF24J40 INT signal   */
+#  endif
 
-#if MODULE_ENC28J80
-#define ENC28J80_PARAM_CS       GPIO15      /* ENC28J80 CS signal    */
-#define ENC28J80_PARAM_RESET    GPIO2       /* ENC28J80 RESET signal */
-#define ENC28J80_PARAM_INT      GPIO13      /* ENC28J80 INT signal   */
-#endif
+#  if MODULE_ENC28J80
+#    define ENC28J80_PARAM_CS       GPIO15  /* ENC28J80 CS signal    */
+#    define ENC28J80_PARAM_RESET    GPIO2   /* ENC28J80 RESET signal */
+#    define ENC28J80_PARAM_INT      GPIO13  /* ENC28J80 INT signal   */
+#  endif
 
 #endif
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```
 For other parameters, the default values defined by the drivers can be used.
 
 @note
@@ -172,9 +172,9 @@ The corresponding board schematic can be found
 Flashing RIOT is quite easy. The board has a Micro-USB connector with
 reset/boot/flash logic. Just connect the board to your host computer
 using the programming port and type:
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```shell
 make flash BOARD=esp32-wemos-lolin-d32-pro ...
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```
 For detailed information about ESP32 as well as configuring and compiling
 RIOT for ESP32 boards, see \ref esp32_riot.
 

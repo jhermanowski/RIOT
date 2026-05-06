@@ -700,7 +700,7 @@ static void _send_multicast(gnrc_pktsnip_t *pkt, bool prep_hdr,
     if (!gnrc_netif_highlander()) {
         /* interface not given: send over all interfaces */
         if (netif == NULL) {
-            /* the packet is replicated over all interfaces that is's being sent on */
+            /* the packet is replicated over all interfaces that it's being sent on */
             gnrc_pktbuf_hold(pkt, ifnum - 1);
 
             while ((netif = gnrc_netif_iter(netif))) {
@@ -1042,7 +1042,7 @@ static void _receive(gnrc_pktsnip_t *pkt)
 
 #else  /* MODULE_GNRC_IPV6_ROUTER */
         DEBUG("ipv6: dropping packet\n");
-        /* non rounting hosts just drop the packet */
+        /* non-routing hosts just drop the packet */
         gnrc_pktbuf_release(pkt);
         return;
 #endif /* MODULE_GNRC_IPV6_ROUTER */

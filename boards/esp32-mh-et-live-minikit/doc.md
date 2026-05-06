@@ -134,13 +134,13 @@ board. You could use the following code in your
 \ref esp32_application_specific_configurations
 "application-specific configuration" to use such a module:
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~{.c}
+```c
 #if MODULE_ENC28J80 && BOARD_ESP32_MH_ET_LIVE_MINIKIT
-#define ENC28J80_PARAM_CS       GPIO14      /* ENC28J80 CS signal    */
-#define ENC28J80_PARAM_INT      GPIO33      /* ENC28J80 INT signal   */
-#define ENC28J80_PARAM_RESET    GPIO12      /* ENC28J80 RESET signal */
+#  define ENC28J80_PARAM_CS       GPIO14    /* ENC28J80 CS signal    */
+#  define ENC28J80_PARAM_INT      GPIO33    /* ENC28J80 INT signal   */
+#  define ENC28J80_PARAM_RESET    GPIO12    /* ENC28J80 RESET signal */
 #endif
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```
 For **ENC28J80_PARAM_SPI** the default parameter defined by the driver can
 be used.
 
@@ -172,9 +172,9 @@ The corresponding board schematic can be found
 Flashing RIOT is quite easy. The board has a Micro-USB connector with a
 reset/boot/flash logic. Just connect the board to your host computer using
 the programming port and type:
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```shell
 make flash BOARD=esp32-mh-et-live-minikit ...
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```
 For detailed information about ESP32 as well as configuring and compiling
 RIOT for ESP32 boards, see \ref esp32_riot.
 

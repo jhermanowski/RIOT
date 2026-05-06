@@ -30,13 +30,13 @@ This lets you access the Feather directly over USB.
 You have several alternative possibilities to connect to the board.
 
 1. With
-   ~~~~~~~~~~~~~~~~~~~~~ {.mk}
+   ```makefile
    USEMODULE += stdio_uart
-   ~~~~~~~~~~~~~~~~~~~~~
+   ```
    and an FTDI adapter connected to the Feather's RX and TX ports you can use
    UART-based terminals to connect to the feather
 2. With
-   ~~~~~~~~~~~~~~~~~~~~~ {.mk}
+   ```makefile
    USEMODULE += stdio_rtt
-   ~~~~~~~~~~~~~~~~~~~~~
+   ```
    you can use the Segger J-Link Programmer as a serial interface to the device.

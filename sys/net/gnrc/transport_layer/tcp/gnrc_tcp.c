@@ -18,16 +18,15 @@
  */
 
 #include <assert.h>
-#include <errno.h>
+#include <errno.h> /* IWYU pragma: keep */
 #include <string.h>
 #include <utlist.h>
 
 #include "evtimer.h"
 #include "evtimer_mbox.h"
 #include "mbox.h"
-#include "net/af.h"
+#include "net/af.h" /* IWYU pragma: keep */
 #include "net/tcp.h"
-#include "net/gnrc.h"
 #include "net/gnrc/netif.h"
 #include "net/gnrc/tcp.h"
 #include "net/sock.h"
@@ -37,12 +36,8 @@
 #include "include/gnrc_tcp_eventloop.h"
 #include "include/gnrc_tcp_rcvbuf.h"
 
-#ifdef MODULE_GNRC_IPV6
-#include "net/gnrc/ipv6.h"
-#endif
-
 #define ENABLE_DEBUG 0
-#include "debug.h"
+#include "debug.h" /* IWYU pragma: keep */
 
 #define TCP_MSG_QUEUE_SIZE (1 << CONFIG_GNRC_TCP_MSG_QUEUE_SIZE_EXP)
 
@@ -193,8 +188,9 @@ int gnrc_tcp_ep_from_str(gnrc_tcp_ep_t *ep, const char *str)
         TCP_DEBUG_LEAVE;
         return -EINVAL;
     }
+
     /* 2) Ensure that the first character is the opening bracket */
-    else if (addr_begin != str) {
+    if (addr_begin != str) {
         TCP_DEBUG_ERROR("-EINVAL: Invalid address string.");
         TCP_DEBUG_LEAVE;
         return -EINVAL;
@@ -259,9 +255,9 @@ int gnrc_tcp_ep_from_str(gnrc_tcp_ep_t *ep, const char *str)
     /* 5.1) Verify address length and copy address into temporary buffer.
      *      This is required to preserve constness of input.
      */
-    int len = addr_end - (++addr_begin);
+    size_t len = addr_end - (++addr_begin);
 
-    if (0 <= len && len < (int) sizeof(tmp)) {
+    if (len < sizeof(tmp)) {
         memcpy(tmp, addr_begin, len);
         tmp[len] = '\0';
     }
@@ -303,7 +299,7 @@ int gnrc_tcp_init(void)
     evtimer_init_mbox(&_tcp_mbox_timer);
 
     /* Start TCP processing thread */
-    kernel_pid_t pid = _gnrc_tcp_eventloop_init();
+    int pid = _gnrc_tcp_eventloop_init();
     TCP_DEBUG_LEAVE;
     return pid;
 }

@@ -20,9 +20,7 @@
  */
 
 #include <stdint.h>
-#include "thread.h"
 #include "mutex.h"
-#include "evtimer.h"
 #include "net/gnrc/netapi.h"
 #include "net/gnrc/tcp/tcb.h"
 

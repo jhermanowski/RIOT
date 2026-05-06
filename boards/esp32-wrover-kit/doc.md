@@ -212,23 +212,23 @@ interface modules have been tested with the board. You could use the following
 code in your \ref esp32_application_specific_configurations
 "application-specific configuration" to use such modules:
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~{.c}
+```c
 #ifdef BOARD_ESP32_WROVER_KIT
 
-#if MODULE_MRF24J40
-#define MRF24J40_PARAM_CS       GPIO9       /* MRF24J40 CS signal    */
-#define MRF24J40_PARAM_INT      GPIO10      /* MRF24J40 INT signal   */
-#define MRF24J40_PARAM_RESET    GPIO12      /* MRF24J40 RESET signal */
-#endif
+#  if MODULE_MRF24J40
+#    define MRF24J40_PARAM_CS       GPIO9   /* MRF24J40 CS signal    */
+#    define MRF24J40_PARAM_INT      GPIO10  /* MRF24J40 INT signal   */
+#    define MRF24J40_PARAM_RESET    GPIO12  /* MRF24J40 RESET signal */
+#  endif
 
-#if MODULE_ENC28J80
-#define ENC28J80_PARAM_CS       GPIO9       /* ENC28J80 CS signal    */
-#define ENC28J80_PARAM_INT      GPIO10      /* ENC28J80 INT signal   */
-#define ENC28J80_PARAM_RESET    GPIO12      /* ENC28J80 RESET signal */
-#endif
+#  if MODULE_ENC28J80
+#    define ENC28J80_PARAM_CS       GPIO9   /* ENC28J80 CS signal    */
+#    define ENC28J80_PARAM_INT      GPIO10  /* ENC28J80 INT signal   */
+#    define ENC28J80_PARAM_RESET    GPIO12  /* ENC28J80 RESET signal */
+#  endif
 
 #endif
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```
 For other parameters, the default values defined by the drivers can be used.
 
 @note
@@ -261,9 +261,9 @@ Flashing RIOT is quite straight forward. The board has a Micro-USB connector
 with reset/boot/flash logic. Just connect the board using the programming port
 to your host computer and type:
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```shell
 make flash BOARD=esp32-wrover-kit ...
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```
 
 The USB bridge is based on FDI FT2232HL and offers two USB interfaces:
 
@@ -275,9 +275,9 @@ Therefore, you have to declare the USB interface in the make command. For
 example, if the ESP32-WROVER-KIT is connected to the host computer through the
 USB interfaces `/dev/ttyUSB0` and `/dev/ttyUSB1`, the make command would be
 used as following:
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```shell
 make flash BOARD=esp32-wrover-kit PORT=/dev/ttyUSB1 ...
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```
 
 For detailed information about ESP32 as well as configuring and compiling RIOT
 for ESP32 boards, see \ref esp32_riot.
@@ -294,35 +294,35 @@ for details on how to setup and how to use ESP-WROVER-Kit V3 and OpenOCD.
 
 To use the JTAG interface, the `esp_jtag` module has to be enabled for
 compilation.
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```shell
 USEMODULE=esp_jtag make flash BOARD=esp32-wrover-kit ...
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```
 
 To flash and debug using OpenOCD, the precompiled version of OpenOCD for
 ESP32 has to be installed using the install script while being in RIOT's
 root directory, see also section
 [Using Local Toolchain Installation](#esp32_local_toolchain_installation).
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```shell
 dist/tools/esptool/install.sh openocd
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```
 
 Before OpenOCD can then be used, the `PATH` variable has to be set correctly
 and the `OPENOCD` variable has to be exported using the following command.
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```shell
 . dist/tools/esptool/export.sh openocd
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```
 
 Once the `PATH` variable and the `OPENOCD` variable are set, OpenOCD can be used
 
 - to flash the application using command
-  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ```shell
   PROGRAMMER=openocd USEMODULE=esp_jtag make flash BOARD=esp32-wrover-kit ...
-  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ```
 - to start a debugging session (the board will be reset, but not flashed)
   using command
-  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ```shell
   PROGRAMMER=openocd USEMODULE=esp_jtag make debug BOARD=esp32-wrover-kit ...
-  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ```
 
 by setting the `PROGRAMMER` variable to `openocd`.
 

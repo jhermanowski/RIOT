@@ -41,9 +41,9 @@ for soldering iron or breadboards.
 Because of the differences in the on-board hardware, it is necessary to
 add the following line to the makefile of the application to use the
 according configuration for Olimex ESP32-GATEWAY:
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```makefile
 USEMODULE += olimex_esp32_gateway
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```
 
 @image html "https://gitlab.com/gschorcht/RIOT.wiki-Images/raw/master/esp32/Olimex_ESP32-EVB_GATEWAY.png" "Olimex ESP32-EVB (left) and Olimex ESP32-GATEWAY (right)"
 
@@ -123,9 +123,9 @@ GPIO27 | EMAC_RMII:RX_DV   | EMAC_RMII:RX_DV  | LAN interface | \ref esp32_ether
 To use the board configuration for Olimex-ESP32-GATEWAY, it is necessary
 to add the following line to makefile of the application:
 \n
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```makefile
 USEMODULE += olimex_esp32_gateway
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```
 - GPIO9 and GIOP10 can only be used in **dout** and **dio**
   \ref esp32_flash_modes "flash modes".
 - It might be necessary to remove the SD card or the peripheral hardware
@@ -145,17 +145,17 @@ You could use the following code in your
 \ref esp32_application_specific_configurations
 "application-specific configuration" to use such modules:
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~{.c}
+```c
 #ifdef BOARD_ESP32_OLIMEX_EVB && !MODULE_ESP32_OLIMEX_GATEWAY
 
-#if MODULE_MRF24J40
-#define MRF24J40_PARAM_CS       GPIO9       /* MRF24J40 CS signal    */
-#define MRF24J40_PARAM_RESET    GPIO10      /* MRF24J40 RESET signal */
-#define MRF24J40_PARAM_INT      GPIO34      /* MRF24J40 INT signal   */
-#endif
+#  if MODULE_MRF24J40
+#    define MRF24J40_PARAM_CS       GPIO9   /* MRF24J40 CS signal    */
+#    define MRF24J40_PARAM_RESET    GPIO10  /* MRF24J40 RESET signal */
+#    define MRF24J40_PARAM_INT      GPIO34  /* MRF24J40 INT signal   */
+#  endif
 
 #endif
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```
 For other parameters, the default values defined by the drivers can be used.
 
 @note
@@ -194,9 +194,9 @@ The corresponding board schematics can be found on GitHub for
 Flashing RIOT is quite easy. The board has a Micro-USB connector with
 reset/boot/flash logic. Just connect the board to your host computer and
 type using the programming port:
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```shell
 make flash BOARD=esp32-olimex-evb ...
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```
 For detailed information about ESP32 as well as configuring and compiling
 RIOT for ESP32 boards, see \ref esp32_riot.
 

@@ -131,24 +131,24 @@ network interface modules have been tested with the board. You could use
 the following code in your \ref esp32_application_specific_configurations
 "application-specific configuration" to use such modules:
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~{.c}
+```c
 #ifdef BOARD_ESP32_WROOM-32
 
-#if MODULE_MRF24J40
-#define MRF24J40_PARAM_CS       GPIO16       /* MRF24J40 CS signal    */
-#define MRF24J40_PARAM_RESET    GPIO17       /* MRF24J40 RESET signal */
-#define MRF24J40_PARAM_INT      GPIO34       /* MRF24J40 INT signal   */
-#define MRF24J40_PARAM_SPI_CLK  SPI_CLK_1MHZ /* SPI clock frequency */
-#endif
+#  if MODULE_MRF24J40
+#    define MRF24J40_PARAM_CS       GPIO16       /* MRF24J40 CS signal    */
+#    define MRF24J40_PARAM_RESET    GPIO17       /* MRF24J40 RESET signal */
+#    define MRF24J40_PARAM_INT      GPIO34       /* MRF24J40 INT signal   */
+#    define MRF24J40_PARAM_SPI_CLK  SPI_CLK_1MHZ /* SPI clock frequency */
+#  endif
 
-#if MODULE_ENC28J80
-#define ENC28J80_PARAM_CS       GPIO32      /* ENC28J80 CS signal    */
-#define ENC28J80_PARAM_RESET    GPIO33      /* ENC28J80 RESET signal */
-#define ENC28J80_PARAM_INT      GPIO35      /* ENC28J80 INT signal   */
-#endif
+#  if MODULE_ENC28J80
+#    define ENC28J80_PARAM_CS       GPIO32      /* ENC28J80 CS signal    */
+#    define ENC28J80_PARAM_RESET    GPIO33      /* ENC28J80 RESET signal */
+#    define ENC28J80_PARAM_INT      GPIO35      /* ENC28J80 INT signal   */
+#  endif
 
 #endif
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```
 For other parameters, the default values defined by the drivers can be used.
 
 @note The **RESET** signal of MRF24J40 and ENC28J60 based modules can also
@@ -178,9 +178,9 @@ The corresponding board schematics can be found
 Flashing RIOT is quite easy. The board has a Micro-USB connector with
 reset/boot/flash logic. Just connect the board to your host computer
 and type using the programming port:
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```shell
 make flash BOARD=esp32-wroom-32 ...
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```
 For detailed information about ESP32 as well as configuring and compiling
 RIOT for ESP32 boards, see \ref esp32_riot.
 
