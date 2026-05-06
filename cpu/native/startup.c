@@ -252,8 +252,7 @@ void daemonize(void)
  */
 static void filter_daemonize_argv(char **argv)
 {
-    int idx = 0;
-    for (char **narg = argv; *narg != NULL; narg++, idx++) {
+    for (char **narg = argv; *narg != NULL; narg++) {
         if (strcmp("-d", narg[0]) == 0) {
             char **xarg = narg;
             do {
