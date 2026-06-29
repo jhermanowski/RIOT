@@ -1,0 +1,5 @@
+cd ~/git/wolfssl-test/dtls-wolfssl
+make compile_commands
+
+cd ~/git/RIOT
+ln -sf ~/git/wolfssl-test/dtls-wolfssl/compile_commands.json compile_commands.json

@@ -32,8 +32,10 @@ extern "C" {
 /* GNRC support enabled if not
  * using sockets
  */
+
 #ifndef MODULE_WOLFSSL_SOCKET
-#define WOLFSSL_GNRC
+// Disabling RIOT code in wolfssl
+//#define WOLFSSL_GNRC
 #define WOLFSSL_USER_IO
 #else
 #include <sys/socket.h>
