@@ -3,11 +3,21 @@ CFLAGS += -DWOLFSSL_RIOT_OS=1
 
 INCLUDES += -I$(APPDIR)
 INCLUDES += -I$(PKGDIRBASE)/wolfssl
-INCLUDES += -I$(RIOTBASE)/pkg/wolfssl/sock_tls
+#INCLUDES += -I$(RIOTBASE)/pkg/wolfssl/sock_tls
 INCLUDES += -I$(RIOTBASE)/pkg/wolfssl/include
+INCLUDES += -I$(RIOTBASE)/pkg/wolfssl/contrib
 
-ifneq (,$(filter sock_tls,$(USEMODULE)))
-  DIRS += $(RIOTBASE)/pkg/wolfssl/sock_tls
+#ifneq (,$(filter sock_tls,$(usemodule)))
+#  dirs += $(riotbase)/pkg/wolfssl/sock_tls
+#endif
+
+# contrib contains sock_dtls adaptation
+ifneq (,$(filter wolfssl_sock_dtls,$(USEMODULE)))
+  DIRS += $(RIOTBASE)/pkg/wolfssl/contrib
+endif
+
+ifneq (,$(filter sock_dtls,$(USEMODULE)))
+  DIRS += $(RIOTBASE)/pkg/wolfssl/contrib
 endif
 
 # wolfcrypt implements different options using pseudomodules
@@ -15,3 +25,7 @@ PSEUDOMODULES += wolfcrypt_%
 
 # wolfssl implements different options using pseudomodules (ocsp, dtls, crl, etc.)
 PSEUDOMODULES += wolfssl_%
+NO_PSEUDOMODULES += wolfssl_sock_dtls
+
+# das hier verstehe ich nicht:w
+#

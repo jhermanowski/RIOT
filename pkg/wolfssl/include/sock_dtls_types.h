@@ -15,7 +15,7 @@
  * @file
  * @brief   wolfssl-specific types and functions definitions
  *
- * @author todco
+ * @author todo
  */
 
 //#include "dtls.h"
@@ -36,16 +36,21 @@ extern "C" {
 struct sock_dtls {
 	sock_udp_t 	*udp_sock;			/**< Underlying TCP sock to use */
 	WOLFSSL_CTX *ctx;		/**< todo */
-	WOLFSSL 	*ssl;				/**< todo */
+//	WOLFSSL 	*ssl;				/**< todo */
 
 	int closing;					//todo: what are those?
-	sock_udp_ep_t peer_addr;		/** peer addr endpoint */
+//	sock_udp_ep_t peer_addr;		/** peer addr endpoint */
 	uint role;
 
 };
-//int GNRC_ReceiveFrom(WOLFSSL* ssl, char* buf, int sz,
- //                                    void* ctx); /**< todo */
-//int GNRC_SendTo(WOLFSSL* ssl, char* buf, int sz, void* ctx); /**> todo */
+
+struct sock_dtls_session {
+	WOLFSSL			*ssl;
+	sock_udp_ep_t	ep;
+	sock_udp_t 		*udp_sock;			/**< Underlying TCP sock to use */
+	bool          	handshake_successfull; /* Hack to know if Handshake was successfull */
+	uint32_t 		recieve_timeout;
+};
 
 #ifdef __cplusplus
 }
