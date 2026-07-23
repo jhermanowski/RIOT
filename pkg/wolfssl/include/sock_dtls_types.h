@@ -37,10 +37,9 @@ struct sock_dtls {
 	sock_udp_t 	*udp_sock;			/**< Underlying TCP sock to use */
 	WOLFSSL_CTX *ctx;		/**< todo */
 //	WOLFSSL 	*ssl;				/**< todo */
-
+	unsigned role;
 	int closing;					//todo: what are those?
 //	sock_udp_ep_t peer_addr;		/** peer addr endpoint */
-	uint role;
 
 };
 
@@ -49,7 +48,9 @@ struct sock_dtls_session {
 	sock_udp_ep_t	ep;
 	sock_udp_t 		*udp_sock;			/**< Underlying TCP sock to use */
 	bool          	handshake_successfull; /* Hack to know if Handshake was successfull */
-	uint32_t 		recieve_timeout;
+	uint32_t 		deadline_us;
+	bool			has_deadline;
+
 };
 
 #ifdef __cplusplus

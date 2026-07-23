@@ -22,8 +22,8 @@
 #include "net/sock/dtls.h"
 #include "net/credman.h"
 #include <stdio.h>
-
-/* private funcktions */
+#include "ztimer.h"
+/* private functions */
 
 
 int _wolfssl_udp_send(WOLFSSL* ssl, char* buf, int sz, void* _ctx)
@@ -47,19 +47,39 @@ int _wolfssl_udp_receive(WOLFSSL *ssl, char *buf, int sz, void *_ctx)
     (void)ssl;
     sock_udp_ep_t ep;
     ssize_t ret;
-	/* This function returns the current timeout value in seconds for the WOLFSSL object. When using non-blocking sockets, something in the user code needs to decide when to check for available recv data and how long it has been waiting. The value returned by this function indicates how long the application should wait. */
-    word32 timeout = wolfSSL_dtls_get_current_timeout(ssl) * 1000000;
 	/*todo angeblich habe ich hier probleme mit dem timeout*/
 
 	sock_dtls_session_t *session = (sock_dtls_session_t *)_ctx;
     if (!session || !session->udp_sock) {
         return WOLFSSL_CBIO_ERR_GENERAL;
 	}
+	
+	
+    uint32_t timeout = wolfSSL_dtls_get_current_timeout(ssl) * 1000000UL;
+	if (session->has_deadline) {
+		uint32_t now = ztimer_now(ZTIMER_USEC);
+		if (now >= session->deadline_us) {
+			/* force wolfssl to return */
+			return WOLFSSL_CBIO_ERR_TIMEOUT;
+		}
+		/* find new timeout set by the API */
+		timeout = session->deadline_us - now;
+		LOG_INFO("timeout set %i\n", timeout);
+	}
 
-    //if (wolfSSL_get_using_nonblock(ctx->ssl)) {
+	/* if nonblocking */
     if (wolfSSL_get_using_nonblock(ssl)) {
         timeout = 0;
-    }
+    } else {
+		int dtls_sec = wolfSSL_dtls_get_current_timeout(session->ssl);
+		if (dtls_sec > 0) {
+			uint32_t dtls_us = (uint32_t)dtls_sec * 1000000UL;
+			if (timeout == SOCK_NO_TIMEOUT || dtls_us < timeout) {
+				timeout = dtls_us;
+			}
+		}
+	
+	}
 
     ret = sock_udp_recv(session->udp_sock, buf, sz, timeout, &ep);
     if (ret > 0) {
@@ -77,6 +97,8 @@ int _wolfssl_udp_receive(WOLFSSL *ssl, char *buf, int sz, void *_ctx)
 }
 
 
+
+/* public functions */
 void sock_dtls_init(void)
 {
     if (wolfSSL_Init() != WOLFSSL_SUCCESS) {
@@ -105,7 +127,9 @@ int sock_dtls_create(sock_dtls_t *sock, sock_udp_t *udp_sock,
         LOG_DEBUG("sock_dtls: invalid role\n");
         return -1;
 	}
-
+	
+	/* setting role */
+	sock->role = role;
 	WOLFSSL_METHOD *method = NULL;
 //todo:version 1_0 und 1_1
 	/* Choosing the right tls method */	
@@ -114,6 +138,7 @@ int sock_dtls_create(sock_dtls_t *sock, sock_udp_t *udp_sock,
 			method = wolfDTLSv1_2_client_method();
 		} 
 		else if (role == SOCK_DTLS_SERVER) {
+			LOG_INFO("SERVER\n");
 			method = wolfDTLSv1_2_server_method();
 		}
 	}	
@@ -150,8 +175,7 @@ int sock_dtls_create(sock_dtls_t *sock, sock_udp_t *udp_sock,
 }
 
 int sock_dtls_session_init(sock_dtls_t *sock, const sock_udp_ep_t *ep,
-		sock_dtls_session_t *remote){
-//todo: we store our remote in sock?	
+		sock_dtls_session_t *remote){ //todo: we store our remote in sock?	
 	sock_udp_ep_t local;
 	
 	remote->handshake_successfull = false;
@@ -211,16 +235,15 @@ int sock_dtls_session_init(sock_dtls_t *sock, const sock_udp_ep_t *ep,
 	wolfSSL_SetIOWriteCtx(remote->ssl, remote);
 	
 	/* start the handshake */
-#define TIMEOUT 5 
+#define TIMEOUT 5
 	wolfSSL_dtls_set_timeout_init(remote->ssl, TIMEOUT);
+	//wolfSSL_dtls_set_timeout_max(remote->ssl, 0);
+	wolfSSL_set_using_nonblock(remote->ssl, 1);
 	LOG_INFO("starting handshake with server\n");
 	ssize_t ret = wolfSSL_connect(remote->ssl);
-	//todo: hier muss ich wie im alten code mich um resetten und neustarten der connection kümmern. auch fehlt in dieser funktion ein error mode
-	
-	int error;
-	if (ret != SSL_SUCCESS) {
-		error = wolfSSL_get_error(remote->ssl, (int)ret);
-		if (error == SSL_ERROR_WANT_WRITE || error == SSL_ERROR_WANT_READ) {
+	wolfSSL_set_using_nonblock(remote->ssl, 0);
+
+	if (ret != SSL_SUCCESS) { int error; error = wolfSSL_get_error(remote->ssl, (int)ret); if (error == SSL_ERROR_WANT_WRITE || error == SSL_ERROR_WANT_READ) {
 			LOG_INFO("Handshake was started\n");
 			//todo:
 			return 1;
@@ -239,6 +262,8 @@ ssize_t sock_dtls_recv_aux (sock_dtls_t *sock,
 		uint32_t timeout,
 		sock_dtls_aux_rx_t *aux){
 //todo: brauchen wir mbox?
+
+
 	if (!sock || !remote) {
 		return -EINVAL;
 	}	
@@ -246,8 +271,58 @@ ssize_t sock_dtls_recv_aux (sock_dtls_t *sock,
 		return -EADDRNOTAVAIL;
 		//todo: do i need to check for sock->local_ep or smth?
 	}
-	if (!wolfSSL_is_init_finished(remote->ssl) || !remote->handshake_successfull) {
-		LOG_DEBUG("handshake is not finished\n");
+	if (timeout == SOCK_NO_TIMEOUT) {
+		remote->has_deadline = false;
+		remote->deadline_us = 0;
+	} else {
+		remote->has_deadline = true;
+		remote->deadline_us = ztimer_now(ZTIMER_USEC) + timeout;
+	}
+
+	if (sock->role == SOCK_DTLS_SERVER) {
+		if (!remote->ssl) {
+
+			LOG_INFO("Setting up server session\n");
+			remote->ssl = wolfSSL_new(sock->ctx);
+			
+			if (!remote->ssl) {
+				LOG_ERROR("SSL object is null\n");	
+			}
+
+			remote->udp_sock = sock->udp_sock;
+			wolfSSL_SetIOReadCtx(remote->ssl, remote);
+			wolfSSL_SetIOWriteCtx(remote->ssl, remote);
+			wolfSSL_dtls_set_timeout_init(remote->ssl, 5);
+			remote->handshake_successfull = false;
+		}
+
+		while (!wolfSSL_is_init_finished(remote->ssl) && (!wolfSSL_is_init_finished(remote->ssl) || !remote->handshake_successfull)){
+			
+			ssize_t ret = wolfSSL_accept(remote->ssl);
+			if (ret == SSL_SUCCESS) {
+				LOG_INFO("New connection accepted\n");
+				remote->handshake_successfull = true;
+				return -SOCK_DTLS_HANDSHAKE;
+			}
+			
+			int error = wolfSSL_get_error(remote->ssl, (int)ret);
+			if (error != WOLFSSL_ERROR_WANT_READ && error != WOLFSSL_ERROR_WANT_WRITE) {
+				LOG_ERROR("Critical while accepting: %d\n", wolfSSL_get_error(remote->ssl, ret));
+				return -1;
+			}
+		}
+	}
+
+
+
+	while (sock->role != SOCK_DTLS_SERVER && (!wolfSSL_is_init_finished(remote->ssl) || !remote->handshake_successfull)){
+		puts("loop");
+		// jakob bitte morgen hier den code für den server accept einbauen
+		// und dann auch das timeout in die die jjk
+		if (remote->has_deadline && ztimer_now(ZTIMER_USEC) >= remote->deadline_us) {
+			return -ETIMEDOUT;
+		}
+		/* wolfssl must be set to nonblocking so we can use our own timer */
 		int ret = wolfSSL_connect(remote->ssl);
 		if (ret == SSL_SUCCESS) {
 			LOG_INFO("handshake was completed\n");
@@ -255,34 +330,133 @@ ssize_t sock_dtls_recv_aux (sock_dtls_t *sock,
 			return -SOCK_DTLS_HANDSHAKE;
 		}
 		int error = wolfSSL_get_error(remote->ssl, ret);
-		if (error == SSL_ERROR_WANT_WRITE || error == SSL_ERROR_WANT_READ) {
-			LOG_INFO("waiting for I/O\n");
-			//here we should try again calling connect and wait or smth
+		if (error != WOLFSSL_ERROR_WANT_READ && error != WOLFSSL_ERROR_WANT_WRITE) {
+			/* critical error */
+			LOG_ERROR("Critical while connecting: %d\n", error);
 			return -1;
 		}
-		return -1;
-		//todo: close session here
-		//todo: restliche fehler müssen wir nicht checken, da wir hier nur handshake fertig oder nicht haben
+
 	}
 
-	int ret = wolfSSL_read(remote->ssl, data, (int)maxlen);
-	if (ret > 0) {
-		LOG_INFO("data successfull read\n");
-		/* returning bytes read */
-		return ret;
+	
+	int ret;
+	while (remote->deadline_us == 0 || ztimer_now(ZTIMER_USEC) >= remote->deadline_us) {
+		
+		ret = wolfSSL_read(remote->ssl, data, (int)maxlen);
+		if (ret > 0) {
+			LOG_INFO("data successfull read\n");
+			/* returning bytes read */
+			return ret;
+		}
+		int error = wolfSSL_get_error(remote->ssl, ret);
+		if (timeout == 0 || error ==  WOLFSSL_ERROR_WANT_READ) {
+			//LOG_INFO("timeout is 0 and no data to read\n");
+			return -EAGAIN;
+		}
+		// ich kann das timeout garnicht setzen...
+		// vermutlich das timeout in der session speichern
 	}
-	int error = wolfSSL_get_error(remote->ssl, ret);
-	if (timeout == 0 || error ==  WOLFSSL_ERROR_WANT_READ) {
-		LOG_INFO("timeout is 0 and no data to read\n");
-		return -EAGAIN;
-	}
-	// ich kann das timeout garnicht setzen...
-	// vermutlich das timeout in der session speichern
-		// WOLFSSL_ERROR_ZERO_RETURN wenn connection geschlossen
+			// WOLFSSL_ERROR_ZERO_RETURN wenn connection geschlossen
+	
 
 	return -1;
 
 	//todo: close session here
-}	
+}
+void sock_dtls_close(sock_dtls_t *sock) {
+	assert(sock);
+	assert(sock->ctx);
+
+	wolfSSL_CTX_free(sock->ctx);
+	sock->ctx = NULL;
+	LOG_INFO("Closed dtls\n");
 	
+}
+void sock_dtls_session_destroy(sock_dtls_t *sock, sock_dtls_session_t *remote) {
+	assert(sock);
+	assert(remote);
+	assert(remote->ssl);
+
+
+	wolfSSL_shutdown(remote->ssl);
+	wolfSSL_free(remote->ssl);
+	
+	remote->ssl = NULL;
+	LOG_INFO("Closed dtls session\n");
+}
+
+ssize_t sock_dtls_sendv_aux (sock_dtls_t *sock, 
+		sock_dtls_session_t *remote,
+		const iolist_t *snips,
+	   	uint32_t timeout,
+	   	sock_dtls_aux_tx_t *aux){
+	assert(sock);
+	assert(remote);
+	assert(remote->ssl);
+
+	/* EADDRINUSE */
+	if (!sock->udp_sock){
+		//todo: check if we need to check for speciality the ep
+		return -EADDRINUSE;
+	}
+	//todo: check for return value flag errors here as in the api
+	
+	if (!wolfSSL_is_init_finished(remote->ssl) || !remote->handshake_successfull){
+		LOG_INFO("Trying to send data while the handshake is not finished. Starting handshake");
+		ssize_t res = sock_dtls_recv(sock, remote, NULL, 0, timeout);
+		if (res < 0) {
+			//todo error checking
+			return -1;
+		}	
+	}
+
+
+	if (snips == NULL) {
+		//todo: error logging
+		return -1;
+	}
+	
+
+	if (snips->iol_next != NULL) {
+//		LOG_ERROR("Wolfssl doesn not support vectored I/O");
+		//todo: build one big message
+		//und auch vielleicht in der docu
+#define WOLFSSL_MAX_PAYLOAD_OR_SOMETHING 1280	
+		static uint8_t buffer[WOLFSSL_MAX_PAYLOAD_OR_SOMETHING];
+		//todo: make this a settable variable in the makefile	
+		//todo: testen
+		size_t buffer_len = 0;
+		
+		
+		for (; snips; snips = snips->iol_next) {
+			if (buffer_len + snips->iol_len > sizeof(buffer)) {
+				LOG_ERROR("Message too big for our message buffer with size: %d", WOLFSSL_MAX_PAYLOAD_OR_SOMETHING);
+        		return -1; /* Abbruch bei Überlauf, statt Speicher zu korrumpieren */
+    		}
+			memcpy(&buffer[buffer_len], snips->iol_base, snips->iol_len);
+			buffer_len += snips->iol_len;
+		}
+				
+		ssize_t res = wolfSSL_write(remote->ssl, buffer, (int)buffer_len);
+		if (res == 0) {
+			return -1;
+			//todo: error handling
+		}
+		
+		return -1;
+	}
+
+	ssize_t res = wolfSSL_write(remote->ssl, snips->iol_base, (int)snips->iol_len);
+	if (res == 0) {
+		if (res == SSL_ERROR_WANT_READ || res == SSL_ERROR_WANT_WRITE) {
+			LOG_ERROR("The I/O is not ready");
+			//todo: deal with it?
+			return -1;
+		}
+		LOG_ERROR("Critical error occured: %d", wolfSSL_get_error(remote->ssl, res));
+		return -1;
+
+	}
+	return 0;
+}
 	
