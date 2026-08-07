@@ -23,6 +23,10 @@
 #include "net/credman.h"
 #include <stdio.h>
 #include "ztimer.h"
+
+#include <wolfssl/wolfcrypt/ecc.h>
+#include <wolfssl/wolfcrypt/asn.h>
+#include <wolfssl/wolfcrypt/error-crypt.h>
 /* private functions */
 
 
@@ -96,6 +100,145 @@ int _wolfssl_udp_receive(WOLFSSL *ssl, char *buf, int sz, void *_ctx)
 	return WOLFSSL_CBIO_ERR_GENERAL;
 }
 
+#ifdef CONFIG_DTLS_PSK
+static unsigned int _wolfssl_psk_server_cb(WOLFSSL* ssl, const char* identity,
+                       unsigned char* key, unsigned int key_max_len) {
+
+	sock_dtls_session_t *remote = (sock_dtls_session_t *)wolfSSL_GetIOReadCtx(ssl);
+	
+    if (!remote || !remote->dtls_sock) {
+        return 0; 
+    }
+
+	/* access dtls_sock */
+    sock_dtls_t *sock = remote->dtls_sock;
+
+
+    if (sock->tags_len == 0) {
+        return 0;
+    }
+
+	credman_credential_t credential;	
+
+	bool found_cb = false;
+	size_t identity_len = strlen(identity);
+
+	for (unsigned i = 0; i < sock->tags_len && !found_cb; i++) {
+        int ret = credman_get(&credential, sock->tags[i], CREDMAN_TYPE_PSK);
+        if (ret == CREDMAN_OK) {
+            if (identity_len == credential.params.psk.id.len &&
+                !strncmp((const char *)credential.params.psk.id.s, identity, identity_len)) {
+                found_cb = true;
+            }
+        }
+    }	
+	if (found_cb) {
+        if (credential.params.psk.key.len > key_max_len) {
+            LOG_ERROR("WolfSSL buffer can't hold the key\n");
+            return 0; 
+        }
+
+        memcpy(key, credential.params.psk.key.s, credential.params.psk.key.len);
+        return credential.params.psk.key.len;
+    }
+
+    LOG_DEBUG("No matching PSK credential found for identity: %s\n", identity);
+	return 0;
+
+
+}
+static unsigned int _wolfssl_psk_client_cb(WOLFSSL* ssl, const char* hint,
+                                           char* identity, unsigned int max_id_len,
+                                           unsigned char* key, unsigned int max_key_len)
+{
+	/* the hint variable is set by wolfssl if the server gave us a hint */
+    sock_dtls_session_t *remote = (sock_dtls_session_t *)wolfSSL_GetIOReadCtx(ssl);
+    
+    if (!remote || !remote->dtls_sock) {
+        return 0; 
+    }
+
+	/* access dtls_sock */
+    sock_dtls_t *sock = remote->dtls_sock;
+
+    if (sock->tags_len == 0) {
+        return 0;
+    }
+	size_t hint_len = 0;
+//todo: immer explizit mit NULL checken 
+	if (hint != NULL) {
+		hint_len = strlen(hint);
+	}
+	credman_credential_t credential;
+	
+
+//todo: immer explizit mit NULL checken 
+	/* if the user has set his own callback in the application */	
+		
+	bool found_cb = false;
+
+	if (sock->client_psk_cb != NULL) {
+        LOG_DEBUG("sock_dtls: requesting the application\n");
+
+		/* this must be set with the api function */
+		credential.tag = sock->client_psk_cb(sock, &remote->ep, sock->tags,
+							sock->tags_len,(const char *)hint, hint_len);
+		if (credential.tag != CREDMAN_TAG_EMPTY) {
+			int ret = credman_get(&credential, credential.tag, CREDMAN_TYPE_PSK);
+			if (ret == CREDMAN_OK) {
+				found_cb = true;	
+			}
+		}
+	}
+	if (found_cb != true){
+		/* only the var tag is set, rest is nulled */
+		credman_credential_t first = { .tag = CREDMAN_TAG_EMPTY};
+		for (unsigned i = 0; i < sock->tags_len && found_cb == false; i++) {
+			int ret =  credman_get(&credential, sock->tags[i], CREDMAN_TYPE_PSK);
+			if (ret == CREDMAN_OK) {
+				if (hint_len == 0) {
+					LOG_DEBUG("No hint set, we take the first cred");
+					found_cb = true;
+				}
+				else {
+					/* setting the first cred in case we have no matching cred in the end */
+					if (first.tag == CREDMAN_TAG_EMPTY) {
+						memcpy(&first, &credential, sizeof(credman_credential_t));
+					}
+					/* Checking if we found the hint */
+					if (hint_len == credential.params.psk.hint.len &&
+                        !strncmp((const char *)credential.params.psk.hint.s, hint, hint_len)) {
+                        found_cb = true;
+                    }
+				}
+			}
+		}
+		/* No hit, using the first cred */
+		if (!found_cb && first.tag != CREDMAN_TAG_EMPTY) {
+            memcpy(&credential, &first, sizeof(credman_credential_t));
+            found_cb = true;
+        }
+	}
+	if (found_cb) {
+		if ((credential.params.psk.id.len >= max_id_len) ||	(credential.params.psk.key.len > max_key_len)) {
+			/* Wolfssl buffer cant hold the key */
+			LOG_ERROR("Wolfssl buffer cant hold the key");
+			return 0; 
+		}
+		/* move identity and key into wolfssl */
+		memcpy(identity, credential.params.psk.id.s, credential.params.psk.id.len);
+        identity[credential.params.psk.id.len] = '\0';
+        memcpy(key, credential.params.psk.key.s, credential.params.psk.key.len);
+
+        return credential.params.psk.key.len;
+	}
+
+	
+	//todo: find out return values
+	return 0;
+}
+#endif
+
 
 
 /* public functions */
@@ -121,6 +264,7 @@ int sock_dtls_create(sock_dtls_t *sock, sock_udp_t *udp_sock,
 		return -1;
 	}
 
+
 	/* clean up sock object */
 	memset(sock, 0, sizeof(*sock));
     if (role != SOCK_DTLS_CLIENT && role != SOCK_DTLS_SERVER) {
@@ -128,6 +272,11 @@ int sock_dtls_create(sock_dtls_t *sock, sock_udp_t *udp_sock,
         return -1;
 	}
 	
+	//todo: just testing	
+	/* NEU: Den übergebenen Tag im Backend speichern! */
+	sock->tags[0] = tag;
+	sock->tags_len = 1;
+	///
 	/* setting role */
 	sock->role = role;
 	WOLFSSL_METHOD *method = NULL;
@@ -159,6 +308,7 @@ int sock_dtls_create(sock_dtls_t *sock, sock_udp_t *udp_sock,
 		return -1;
 	}
 	sock->ctx = wolfSSL_CTX_new(method);
+
 	if (!sock->ctx) {
 		LOG_DEBUG("sock_dtls: error getting DTLS context\n");
 		return -1;
@@ -167,10 +317,168 @@ int sock_dtls_create(sock_dtls_t *sock, sock_udp_t *udp_sock,
 	wolfSSL_CTX_SetIORecv(sock->ctx, _wolfssl_udp_receive);
 	wolfSSL_CTX_SetIOSend(sock->ctx, _wolfssl_udp_send);
 
+
+	/* enable the psk stuff */
+#ifdef MODULE_WOLFSSL_PSK
+	wolfSSL_CTX_set_psk_client_callback(sock->ctx, _wolfssl_psk_client_cb);
+	wolfSSL_CTX_set_psk_server_callback(sock->ctx, _wolfssl_psk_server_cb);
+
+	//todo erlaubt psk algos?
+	if (wolfSSL_CTX_set_cipher_list(sock->ctx, "PSK-AES128-CCM-8") != WOLFSSL_SUCCESS) {
+        puts("Error setting client cipher suite");
+        return -1;
+    }
+#endif
+
+#ifdef HAVE_SECURE_RENEGOTIATION
+    if (wolfSSL_CTX_UseSecureRenegotiation(sock->ctx) != WOLFSSL_SUCCESS) {
+        puts("Error enabling secure renegotiation");
+    }
+#endif
+
 	sock->role = role;
 	sock->udp_sock = udp_sock;
 	LOG_INFO("dtls object initialized\n");
 
+	return 0;
+}
+
+int _load_client_ecc_certs(sock_dtls_t *sock, credman_tag_t tag,
+		sock_dtls_session_t *remote, const sock_udp_ep_t *ep)
+{
+
+#ifdef CONFIG_DTLS_ECC
+	/* convert certs ig */
+	(void)tag;	
+    credman_credential_t credential;
+
+    credential.tag = CREDMAN_TAG_EMPTY;
+    LOG_DEBUG("sock_dtls: get ECDSA key\n");
+	int ret;
+    /* if the application set a callback , try to select credential from there */
+    if (sock->rpk_cb) {
+        LOG_DEBUG("sock_dtls: requesting the application\n");
+        credential.tag = sock->rpk_cb(sock, (sock_udp_ep_t *)ep, sock->tags, sock->tags_len);
+        if (credential.tag != CREDMAN_TAG_EMPTY) {
+            ret = credman_get(&credential, credential.tag, CREDMAN_TYPE_ECDSA);
+            if (ret != CREDMAN_OK) {
+                credential.tag = CREDMAN_TAG_EMPTY;
+            }
+        }
+    }
+//todo: we have to choose the tag set in tag 
+    if (credential.tag == CREDMAN_TYPE_EMPTY) {
+        /* if could not get credential try to fetch the first valid credential */
+        for (unsigned i = 0; i < sock->tags_len; i++) {
+            ret = credman_get(&credential, sock->tags[i], CREDMAN_TYPE_ECDSA);
+            if (ret == CREDMAN_OK) {
+                break;
+            }
+        }
+
+        if (ret != CREDMAN_OK) {
+            LOG_DEBUG("sock_dtls: no valid credential registered\n");
+			//todo: what return value
+            return -1;
+        }
+    }
+	/* load server public keys */
+	for (size_t i = 0; i < credential.params.ecdsa.client_keys_size; i++) {
+
+		ecc_key server_key;
+		wc_ecc_init(&server_key);
+
+		
+		if (wc_ecc_import_unsigned(&server_key, 
+                         (const byte *)credential.params.ecdsa.client_keys[i].x,
+                         (const byte *)credential.params.ecdsa.client_keys[i].y,
+                         NULL,
+                         ECC_SECP256R1) == 0) {
+
+			byte server_der_buf[150];
+			
+			word32 server_der_size = wc_EccPublicKeyToDer(&server_key, server_der_buf, sizeof(server_der_buf),1);
+			if (server_der_size > 0) {
+				if (sock->role == SOCK_DTLS_SERVER) {
+					wolfSSL_CTX_set_expected_rpk(sock->ctx, server_der_buf, server_der_size);
+				} else {
+					wolfSSL_set_expected_rpk(remote->ssl, server_der_buf, server_der_size);
+				}
+			}
+		}
+		wc_ecc_free(&server_key);
+
+	}
+
+	ecc_key my_key;
+	//https://www.wolfssl.com/documentation/manuals/wolfssl/group__ECC.html#function-wc_ecc_init
+    wc_ecc_init(&my_key);
+	//https://www.wolfssl.com/documentation/manuals/wolfssl/group__ECC.html#function-wc_ecc_import_raw	
+	//
+	//todo: wir nehmen den rawen key und machen dem zu einem ecc key. 
+	//da schein priv und pub inkludiert zu sein
+	//dann machen wir aus dem einen der pub und einen der key?
+	// wir freenen den ecc key
+	// und laden dann den key an wolfssl
+	if (wc_ecc_import_unsigned(&my_key, 
+                         (const byte *)credential.params.ecdsa.public_key.x,
+                         (const byte *)credential.params.ecdsa.public_key.y,
+                         (const byte *)credential.params.ecdsa.private_key,
+                         ECC_SECP256R1) == 0) {
+
+		byte der_buf[150];
+		//Distinguished Encoding Rules
+		//https://www.wolfssl.com/documentation/manuals/wolfssl/group__ASN.html#function-wc_ecckeytoder
+
+		word32 der_sz = wc_EccKeyToDer(&my_key, der_buf, sizeof(der_buf));
+		if (der_sz > 0) {
+			if (sock->role == SOCK_DTLS_SERVER) {
+				wolfSSL_CTX_use_PrivateKey_buffer(sock->ctx, der_buf, der_sz, WOLFSSL_FILETYPE_ASN1);
+			} else {
+				wolfSSL_use_PrivateKey_buffer(remote->ssl, der_buf, der_sz, WOLFSSL_FILETYPE_ASN1);
+			}
+		}
+
+		word32 pub_sz = wc_EccPublicKeyToDer(&my_key, der_buf, sizeof(der_buf), 1);
+		if (pub_sz > 0) {
+			if (sock->role == SOCK_DTLS_SERVER) {
+				wolfSSL_CTX_use_certificate_buffer(sock->ctx, der_buf, pub_sz, WOLFSSL_FILETYPE_ASN1);
+			} else {
+				wolfSSL_use_certificate_buffer(remote->ssl, der_buf, pub_sz, WOLFSSL_FILETYPE_ASN1);
+			}
+		}
+	}
+	wc_ecc_free(&my_key);
+	if (sock->role == SOCK_DTLS_SERVER) {
+		if (wolfSSL_CTX_set_cipher_list(sock->ctx, "ECDHE-ECDSA-AES128-CCM-8") != WOLFSSL_SUCCESS) {
+			LOG_ERROR("could not set cipher\n");
+			return -1;
+		}
+	} else {
+		if (wolfSSL_set_cipher_list(remote->ssl, "ECDHE-ECDSA-AES128-CCM-8") != WOLFSSL_SUCCESS) {
+			LOG_ERROR("could not set cipher\n");
+			return -1;
+		}
+	}
+	/* enables verifying */
+	if (sock->role == SOCK_DTLS_SERVER) {
+		wolfSSL_CTX_set_verify(sock->ctx, WOLFSSL_VERIFY_PEER | WOLFSSL_VERIFY_FAIL_IF_NO_PEER_CERT, 0);
+	} else {
+		wolfSSL_set_verify(remote->ssl, WOLFSSL_VERIFY_PEER | WOLFSSL_VERIFY_FAIL_IF_NO_PEER_CERT, 0);
+	}
+//	wolfSSL_set_verify(remote->ssl, WOLFSSL_VERIFY_NONE, NULL);
+#ifdef HAVE_RPK
+    char cert_type = WOLFSSL_CERT_TYPE_RPK;
+    /* Fordert an, dass der Client ein RPK senden darf */
+	if (sock->role == SOCK_DTLS_SERVER) {
+		wolfSSL_CTX_set_client_cert_type(sock->ctx, &cert_type, 1);
+		wolfSSL_CTX_set_server_cert_type(sock->ctx , &cert_type, 1);
+	} else {
+		wolfSSL_set_client_cert_type(remote->ssl, &cert_type, 1);
+		wolfSSL_set_server_cert_type(remote->ssl, &cert_type, 1);
+	}
+#endif
+#endif
 	return 0;
 }
 
@@ -193,6 +501,8 @@ int sock_dtls_session_init(sock_dtls_t *sock, const sock_udp_ep_t *ep,
 		LOG_ERROR("the endpoint is invalid, port is set to 0\n");
 		return -EINVAL;
 	}
+
+
 	puts("port is set");
     switch (ep->family) {
 #ifdef SOCK_HAS_IPV4
@@ -211,6 +521,7 @@ int sock_dtls_session_init(sock_dtls_t *sock, const sock_udp_ep_t *ep,
 	/* prepare the remote party to connect to */	
 	XMEMCPY(&remote->ep, ep, sizeof(sock_udp_ep_t));
 	remote->udp_sock = sock->udp_sock;
+	remote->dtls_sock = sock; //todo: hier abuse ich die i/o context um auf alles zuzugreifen können
 	if (!sock->ctx) {
 		LOG_ERROR("wolfSSL ctx is null\n");
 		/* todo wrong return value */
@@ -227,23 +538,31 @@ int sock_dtls_session_init(sock_dtls_t *sock, const sock_udp_ep_t *ep,
 		return 1;
 	}
 	remote->ssl = wolfSSL_new(sock->ctx);
+
+
+	if (_load_client_ecc_certs(sock, 0, remote, ep) == -1 ){
+		//todo: better errormanagement
+		return -1;
+	}
+
 	if (!remote->ssl) {
 		LOG_ERROR("Error allocating ssl session\n");
 		return -ENOMEM;
 	}
 	wolfSSL_SetIOReadCtx(remote->ssl, remote);
 	wolfSSL_SetIOWriteCtx(remote->ssl, remote);
-	
 	/* start the handshake */
 #define TIMEOUT 5
 	wolfSSL_dtls_set_timeout_init(remote->ssl, TIMEOUT);
 	//wolfSSL_dtls_set_timeout_max(remote->ssl, 0);
 	wolfSSL_set_using_nonblock(remote->ssl, 1);
 	LOG_INFO("starting handshake with server\n");
-	ssize_t ret = wolfSSL_connect(remote->ssl);
+	int ret = wolfSSL_connect(remote->ssl);
 	wolfSSL_set_using_nonblock(remote->ssl, 0);
-
-	if (ret != SSL_SUCCESS) { int error; error = wolfSSL_get_error(remote->ssl, (int)ret); if (error == SSL_ERROR_WANT_WRITE || error == SSL_ERROR_WANT_READ) {
+	
+	if (ret != SSL_SUCCESS) { 
+		int error; error = wolfSSL_get_error(remote->ssl, (int)ret);
+	   	if (error == SSL_ERROR_WANT_WRITE || error == SSL_ERROR_WANT_READ) {
 			LOG_INFO("Handshake was started\n");
 			//todo:
 			return 1;
@@ -262,7 +581,8 @@ ssize_t sock_dtls_recv_aux (sock_dtls_t *sock,
 		uint32_t timeout,
 		sock_dtls_aux_rx_t *aux){
 //todo: brauchen wir mbox?
-
+	(void) aux;
+	assert(sock);
 
 	if (!sock || !remote) {
 		return -EINVAL;
@@ -280,24 +600,31 @@ ssize_t sock_dtls_recv_aux (sock_dtls_t *sock,
 	}
 
 	if (sock->role == SOCK_DTLS_SERVER) {
-		if (!remote->ssl) {
+		if (remote->ssl == NULL) {
+			_load_client_ecc_certs(sock, 0, remote, &remote->ep);
 
 			LOG_INFO("Setting up server session\n");
 			remote->ssl = wolfSSL_new(sock->ctx);
 			
-			if (!remote->ssl) {
+			if (remote->ssl == NULL) {
 				LOG_ERROR("SSL object is null\n");	
+				return -ENOMEM; 
 			}
-
+			
 			remote->udp_sock = sock->udp_sock;
+			remote->dtls_sock = sock;
 			wolfSSL_SetIOReadCtx(remote->ssl, remote);
 			wolfSSL_SetIOWriteCtx(remote->ssl, remote);
 			wolfSSL_dtls_set_timeout_init(remote->ssl, 5);
+			wolfSSL_set_using_nonblock(remote->ssl, 1);
 			remote->handshake_successfull = false;
 		}
 
-		while (!wolfSSL_is_init_finished(remote->ssl) && (!wolfSSL_is_init_finished(remote->ssl) || !remote->handshake_successfull)){
+		while (!wolfSSL_is_init_finished(remote->ssl) || !remote->handshake_successfull){
 			
+			if (remote->has_deadline && ztimer_now(ZTIMER_USEC) >= remote->deadline_us) {
+				return -ETIMEDOUT;
+			}
 			ssize_t ret = wolfSSL_accept(remote->ssl);
 			if (ret == SSL_SUCCESS) {
 				LOG_INFO("New connection accepted\n");
@@ -317,7 +644,6 @@ ssize_t sock_dtls_recv_aux (sock_dtls_t *sock,
 
 	while (sock->role != SOCK_DTLS_SERVER && (!wolfSSL_is_init_finished(remote->ssl) || !remote->handshake_successfull)){
 		puts("loop");
-		// jakob bitte morgen hier den code für den server accept einbauen
 		// und dann auch das timeout in die die jjk
 		if (remote->has_deadline && ztimer_now(ZTIMER_USEC) >= remote->deadline_us) {
 			return -ETIMEDOUT;
@@ -333,6 +659,8 @@ ssize_t sock_dtls_recv_aux (sock_dtls_t *sock,
 		if (error != WOLFSSL_ERROR_WANT_READ && error != WOLFSSL_ERROR_WANT_WRITE) {
 			/* critical error */
 			LOG_ERROR("Critical while connecting: %d\n", error);
+			sock_dtls_close(sock);
+			sock_dtls_session_destroy(sock, remote);
 			return -1;
 		}
 
