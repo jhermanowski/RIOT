@@ -8,11 +8,12 @@
  * @file
  * @ingroup unittests
  * @brief   Unit tests for CoAP option accessors
- * @author  Carl Seifert <carl.seifert1@mailbox.tu-dresden.de>
+ * @author  Carl Seifert <carl.seifert@tu-dresden.de>
  */
 
 #include <stdio.h>
 
+#include "modules.h"
 #include "tests-unicoap.h"
 
 #include "net/unicoap/options.h"
@@ -69,6 +70,16 @@ static void test_in_order(void)
 static void test_out_of_order(void)
 {
     UNICOAP_OPTIONS_ALLOC_STATIC(options, 100);
+
+    if (!IS_ACTIVE(CONFIG_UNICOAP_OPTIONS_FULL_SUPPORT)) {
+        TEST_ASSERT_EQUAL_INT(unicoap_options_set_content_format(&options, UNICOAP_FORMAT_JSON), 0);
+        TEST_ASSERT_EQUAL_INT(unicoap_options_set_accept(&options, UNICOAP_FORMAT_JSON), 0);
+        TEST_ASSERT_EQUAL_INT(unicoap_options_add_uri_path_component_string(&options, "actuators"), -ENOTSUP);
+        TEST_ASSERT_EQUAL_INT(unicoap_options_add_uri_query_string(&options, "color=g"), -ENOTSUP);
+        TEST_ASSERT_EQUAL_INT(unicoap_options_add_uri_path_component_string(&options, "leds"), -ENOTSUP);
+        return;
+    }
+
     TEST_ASSERT_EQUAL_INT(unicoap_options_set_accept(&options, UNICOAP_FORMAT_JSON), 0);
     TEST_ASSERT_EQUAL_INT(unicoap_options_add_uri_path_component_string(&options, "actuators"), 0);
     TEST_ASSERT_EQUAL_INT(unicoap_options_add_uri_query_string(&options, "color=g"), 0);
@@ -81,6 +92,13 @@ static void test_out_of_order(void)
 static void test_idempotent(void)
 {
     UNICOAP_OPTIONS_ALLOC_STATIC(options, 100);
+
+    if (!IS_ACTIVE(CONFIG_UNICOAP_OPTIONS_FULL_SUPPORT)) {
+        TEST_ASSERT_EQUAL_INT(unicoap_options_set_accept(&options, UNICOAP_FORMAT_JSON), 0);
+        TEST_ASSERT_EQUAL_INT(unicoap_options_set_accept(&options, UNICOAP_FORMAT_JSON), -ENOTSUP);
+        return;
+    }
+
     TEST_ASSERT_EQUAL_INT(unicoap_options_set_accept(&options, UNICOAP_FORMAT_JSON), 0);
     TEST_ASSERT_EQUAL_INT(unicoap_options_set_accept(&options, UNICOAP_FORMAT_JSON), 0);
     TEST_ASSERT_EQUAL_INT(unicoap_options_add_uri_path_component_string(&options, "actuators"), 0);
@@ -109,6 +127,11 @@ static void _populate(unicoap_options_t* options)
 
 static void test_extended_uint_shifts(void)
 {
+    if (!IS_ACTIVE(CONFIG_UNICOAP_OPTIONS_FULL_SUPPORT)) {
+        /* no shifting supported anyways */
+        return;
+    }
+
     UNICOAP_OPTIONS_ALLOC_STATIC(options, 900);
     _populate(&options);
 
@@ -177,6 +200,11 @@ static void test_extended_uint_shifts(void)
 
 static void test_remove_leading(void)
 {
+    if (!IS_ACTIVE(CONFIG_UNICOAP_OPTIONS_FULL_SUPPORT)) {
+        /* no removal supported anyways */
+        return;
+    }
+
     UNICOAP_OPTIONS_ALLOC_STATIC(options, 900);
     _populate(&options);
 
@@ -247,6 +275,11 @@ static void test_remove_leading(void)
 
 static void test_remove_trailing(void)
 {
+    if (!IS_ACTIVE(CONFIG_UNICOAP_OPTIONS_FULL_SUPPORT)) {
+        /* no removal supported anyways */
+        return;
+    }
+
     UNICOAP_OPTIONS_ALLOC_STATIC(options, 900);
     _populate(&options);
 
@@ -317,6 +350,11 @@ static void test_remove_trailing(void)
 
 static void test_remove_multiple(void)
 {
+    if (!IS_ACTIVE(CONFIG_UNICOAP_OPTIONS_FULL_SUPPORT)) {
+        /* no removal supported anyways */
+        return;
+    }
+
     UNICOAP_OPTIONS_ALLOC_STATIC(options, 900);
     _populate(&options);
 
@@ -383,6 +421,23 @@ static void test_remove_multiple(void)
     _TEST_ASSERT_EQUAL_BYTES(options_blob, unicoap_options_data(&options), sizeof(options_blob));
 }
 
+static void test_remove_multiple_trailing(void)
+{
+    if (!IS_ACTIVE(CONFIG_UNICOAP_OPTIONS_FULL_SUPPORT)) {
+        /* no removal supported anyways */
+        return;
+    }
+
+    UNICOAP_OPTIONS_ALLOC_STATIC(options, 20);
+    TEST_ASSERT_EQUAL_INT(unicoap_options_set(&options, 4, (uint8_t*)poem, 1), 0);
+    TEST_ASSERT_EQUAL_INT(unicoap_options_set(&options, 1, (uint8_t*)poem, 1), 0);
+    TEST_ASSERT_EQUAL_INT(unicoap_options_add(&options, 4, (uint8_t*)poem, 1), 0);
+    TEST_ASSERT_EQUAL_INT(6, unicoap_options_size(&options));
+
+    TEST_ASSERT_EQUAL_INT(unicoap_options_remove_all(&options, 4), 0);
+    TEST_ASSERT_EQUAL_INT(2, unicoap_options_size(&options));
+}
+
 static void test_option_value_uses_shortest_possible_representation(void)
 {
     static const uint8_t options_blob[] = { 0x00 };
@@ -414,6 +469,7 @@ Test* tests_unicoap_options(void)
         new_TestFixture(test_remove_leading),
         new_TestFixture(test_remove_trailing),
         new_TestFixture(test_remove_multiple),
+        new_TestFixture(test_remove_multiple_trailing),
         new_TestFixture(test_option_value_uses_shortest_possible_representation),
     };
 

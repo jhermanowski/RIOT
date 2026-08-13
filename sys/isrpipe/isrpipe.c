@@ -50,8 +50,34 @@ int isrpipe_read(isrpipe_t *isrpipe, uint8_t *buffer, size_t count)
 {
     int res;
 
+    if (!count) {
+        return 0;
+    }
+
     while (!(res = tsrb_get(&isrpipe->tsrb, buffer, count))) {
         mutex_lock(&isrpipe->mutex);
     }
+
     return res;
+}
+
+uint8_t isrpipe_read_one(isrpipe_t *isrpipe)
+{
+    int res;
+
+    while ((res = tsrb_get_one(&isrpipe->tsrb)) < 0) {
+        mutex_lock(&isrpipe->mutex);
+    }
+
+    return res;
+}
+
+void isrpipe_clear(isrpipe_t *isrpipe)
+{
+    tsrb_clear(&isrpipe->tsrb);
+}
+
+unsigned int isrpipe_available(isrpipe_t *isrpipe)
+{
+    return tsrb_avail(&isrpipe->tsrb);
 }

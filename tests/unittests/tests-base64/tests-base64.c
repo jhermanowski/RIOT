@@ -388,7 +388,43 @@ static void test_base64_10_encode_empty(void)
     TEST_ASSERT_EQUAL_INT(0, base64_out_size);
 }
 
-static void test_base64_10_decode_empty(void)
+static void test_base64_11_encode_empty_null_out(void)
+{
+    unsigned char data_in[] = "";
+
+    size_t base64_out_size = 0;
+
+    int ret = base64_encode(data_in, 0, NULL, &base64_out_size);
+
+    TEST_ASSERT_EQUAL_INT(BASE64_SUCCESS, ret);
+    TEST_ASSERT_EQUAL_INT(0, base64_out_size);
+}
+
+static void test_base64_12_encode_overflow(void)
+{
+    unsigned char data_in[] = "";
+
+    size_t base64_out_size = 0;
+
+    /* To test if `base64_encode()` detects an overflow of the output size
+     * argument, we need to pass a size argument that is incredibly large. The
+     * compiler is unaware that base64_encode() won't actually read from
+     * `data_in` due to the overflow and will complain about reading
+     * `SIZE_MAX - 1` bytes beyond `data_in`. So we just disable the diagnostics
+     * here temporarily. */
+#if defined(__clang__) || (defined(__GNUC__) && __GNUC__ >= 8)
+#  pragma GCC diagnostic push
+#  pragma GCC diagnostic ignored "-Wstringop-overflow"
+#endif
+    int ret = base64_encode(data_in, SIZE_MAX, NULL, &base64_out_size);
+#if defined(__clang__) || (defined(__GNUC__) && __GNUC__ >= 8)
+#  pragma GCC diagnostic pop
+#endif
+
+    TEST_ASSERT_EQUAL_INT(BASE64_ERROR_OVERFLOW, ret);
+}
+
+static void test_base64_13_decode_empty(void)
 {
     unsigned char data_in[] = "";
 
@@ -401,7 +437,19 @@ static void test_base64_10_decode_empty(void)
     TEST_ASSERT_EQUAL_INT(0, base64_out_size);
 }
 
-static void test_base64_11_urlsafe_encode_int(void)
+static void test_base64_14_decode_empty_null_out(void)
+{
+    unsigned char data_in[] = "";
+
+    size_t data_out_size = 0;
+
+    int ret = base64_decode(data_in, 0, NULL, &data_out_size);
+
+    TEST_ASSERT_EQUAL_INT(BASE64_SUCCESS, ret);
+    TEST_ASSERT_EQUAL_INT(0, data_out_size);
+}
+
+static void test_base64_15_urlsafe_encode_int(void)
 {
     uint32_t data_in = 4345;
     unsigned char expected_encoding[] = "-RAAAA";
@@ -439,7 +487,7 @@ static void test_base64_11_urlsafe_encode_int(void)
 #endif
 }
 
-static void test_base64_12_urlsafe_decode_int(void)
+static void test_base64_16_urlsafe_decode_int(void)
 {
     static const char encoded_base64[]  = "_____wAA";
     static const uint8_t expected[]     = {0xFF, 0xFF, 0xFF, 0xFF, 0x0, 0x0};
@@ -472,7 +520,7 @@ static void test_base64_12_urlsafe_decode_int(void)
 #endif
 }
 
-static void test_base64_13_size_estimation(void) {
+static void test_base64_17_size_estimation(void) {
     size_t expected = 0;
     for (size_t i = 0; i < 33; i += 3) {
         TEST_ASSERT_EQUAL_INT(expected, base64_estimate_encode_size(i + 0));
@@ -504,10 +552,13 @@ Test *tests_base64_tests(void)
         new_TestFixture(test_base64_08_encode_16_bytes),
         new_TestFixture(test_base64_09_encode_size_determination),
         new_TestFixture(test_base64_10_encode_empty),
-        new_TestFixture(test_base64_10_decode_empty),
-        new_TestFixture(test_base64_11_urlsafe_encode_int),
-        new_TestFixture(test_base64_12_urlsafe_decode_int),
-        new_TestFixture(test_base64_13_size_estimation),
+        new_TestFixture(test_base64_11_encode_empty_null_out),
+        new_TestFixture(test_base64_12_encode_overflow),
+        new_TestFixture(test_base64_13_decode_empty),
+        new_TestFixture(test_base64_14_decode_empty_null_out),
+        new_TestFixture(test_base64_15_urlsafe_encode_int),
+        new_TestFixture(test_base64_16_urlsafe_decode_int),
+        new_TestFixture(test_base64_17_size_estimation),
     };
 
     EMB_UNIT_TESTCALLER(base64_tests, NULL, NULL, fixtures);

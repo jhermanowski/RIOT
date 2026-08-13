@@ -236,7 +236,10 @@ GLOBAL_GOALS += info-boards-features-blacklisted \
                 generate-Makefile.ci \
                 #
 
-ifneq (, $(filter $(GLOBAL_GOALS), $(MAKECMDGOALS)))
+PRIVATE_GLOBAL_GOALS := info-boards-collect \
+                        #
+
+ifneq (,$(filter $(GLOBAL_GOALS) $(PRIVATE_GLOBAL_GOALS),$(MAKECMDGOALS)))
   include $(RIOTMAKE)/info-global.inc.mk
 else
 
@@ -335,6 +338,12 @@ APPLICATION := $(strip $(APPLICATION))
 
 DOWNLOAD_TO_FILE ?= $(DLCACHE)
 
+# Check whether `which` is installed
+ifeq ($(shell command -v which 2>/dev/null),)
+  $(error 'which' is required but not found in PATH.)
+endif
+
+# Check whether unzip or 7z is installed, and set UNZIP_HERE to the command to use
 ifeq (,$(UNZIP_HERE))
   ifeq (0,$(shell which unzip > /dev/null 2>&1 ; echo $$?))
     UNZIP_HERE = $(call memoized,UNZIP_HERE,$(shell which unzip) -q)
@@ -814,9 +823,13 @@ ifndef MAKE_RESTARTS
 endif
 
 # Remove intermediates, but keep the .elf, .hex and .map etc.
+# Special care has to be taken for ESP32 targets, the bootloader directory has
+# to be kept!
 clean-intermediates:
 	-@$(foreach dir,$(PKG_PATHS),"$(MAKE)" -C $(dir) distclean $(NEWLINE))
-	-@rm -rf $(BINDIR)/*.a $(BINDIR)/*/
+	-@rm -rf $(BINDIR)/*.a
+	-@find $(BINDIR)/ -mindepth 1 \
+	    -not -path "*/esp\_bootloader" -type d -exec rm -rf {} +;
 
 clean-pkg:
 	-@$(foreach dir,$(PKG_PATHS),"$(MAKE)" -C $(dir) distclean $(NEWLINE))
@@ -961,7 +974,7 @@ include $(RIOTMAKE)/tools/targets.inc.mk
 include $(RIOTMAKE)/usb-codes.inc.mk
 
 # Warn if the selected board and drivers don't provide all needed features:
-ifeq (, $(filter help generate-Makefile.ci, $(MAKECMDGOALS)))
+ifeq (, $(filter clean distclean generate-Makefile.ci help, $(MAKECMDGOALS)))
   EXPECT_ERRORS :=
 
   # Test if there where dependencies against a module in DISABLE_MODULE.
@@ -986,13 +999,15 @@ ifeq (, $(filter help generate-Makefile.ci, $(MAKECMDGOALS)))
     EXPECT_ERRORS := 1
   endif
 
-BOARDS_SUPPORTED += $(BOARD_WHITELIST)
-BOARDS_UNSUPPORTED += $(BOARD_BLACKLIST)
+  BOARDS_SUPPORTED += $(BOARD_WHITELIST)
+  BOARDS_UNSUPPORTED += $(BOARD_BLACKLIST)
 
-ifneq (, $(BOARD_WHITELIST)$(BOARD_BLACKLIST))
-  $(shell $(COLOR_ECHO) "$(COLOR_YELLOW)BOARD_WHITELIST has been renamed to BOARDS_SUPPORTED and BOARD_BLACKLIST to BOARDS_UNSUPPORTED.$(COLOR_RESET)" 1>&2)
-  $(shell $(COLOR_ECHO) "The contents of BOARD_WHITELIST have been appended to BOARDS_SUPPORTED and the contents of BOARD_BLACKLIST to BOARDS_UNSUPPORTED for compatibility." 1>&2)
-endif
+  ifneq (, $(BOARD_WHITELIST)$(BOARD_BLACKLIST))
+    $(shell $(COLOR_ECHO) "$(COLOR_YELLOW)BOARD_WHITELIST has been renamed to"\
+      "BOARDS_SUPPORTED and BOARD_BLACKLIST to BOARDS_UNSUPPORTED.$(COLOR_RESET)" 1>&2)
+    $(shell $(COLOR_ECHO) "The contents of BOARD_WHITELIST have been appended to"\
+      "BOARDS_SUPPORTED and the contents of BOARD_BLACKLIST to BOARDS_UNSUPPORTED for compatibility." 1>&2)
+  endif
 
   # Test if any used feature conflict with another one.
   ifneq (,$(FEATURES_CONFLICTING))
@@ -1088,6 +1103,8 @@ $(RIOTBUILD_CONFIG_HEADER_C).in: FORCE | $(CLEAN)
 CFLAGS_WITH_MACROS += $(CFLAGS)
 CFLAGS_WITH_MACROS += -DRIOT_VERSION=\"$(RIOT_VERSION)\"
 CFLAGS_WITH_MACROS += -DRIOT_VERSION_CODE=$(RIOT_VERSION_CODE)
+# To allow package code easily check if compiled against RIOT or not:
+CFLAGS_WITH_MACROS += -DRIOT_OS=1
 ifneq (,$(RIOT_VERSION_EXTRA))
   CFLAGS_WITH_MACROS += -DCONFIG_RIOT_VERSION_EXTRA=\""$(RIOT_VERSION_EXTRA)"\"
 endif

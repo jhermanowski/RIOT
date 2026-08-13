@@ -34,9 +34,10 @@ extern "C" {
  */
 
 #ifndef MODULE_WOLFSSL_SOCKET
-// Disabling RIOT code in wolfssl
-//#define WOLFSSL_GNRC
+#ifndef WOLFSSL_NO_SOCK
 #define WOLFSSL_NO_SOCK
+#endif
+#define WOLFSSL_GNRC
 #define WOLFSSL_USER_IO
 #else
 #include <sys/socket.h>
